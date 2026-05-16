@@ -2,6 +2,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class TokenStorage {
   static const FlutterSecureStorage _storage = FlutterSecureStorage();
+
   static const String _tokenKey = 'auth_token';
 
   Future<void> saveToken(String token) async {
@@ -19,5 +20,9 @@ class TokenStorage {
   Future<bool> hasToken() async {
     final token = await getToken();
     return token != null && token.isNotEmpty;
+  }
+
+  Future<void> clearAll() async {
+    await _storage.deleteAll();
   }
 }

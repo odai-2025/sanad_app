@@ -30,8 +30,8 @@ class SanadApp extends StatelessWidget {
         ),
         ChangeNotifierProvider<AuthProvider>(
           create: (context) => AuthProvider(
-            context.read<AuthRepositoryImpl>(),
-          )..checkLoginStatus(),
+            context.read<AuthRepositoryImpl>(),)
+            // ..checkLoginStatus(),
         ),
         ChangeNotifierProxyProvider<AuthProvider, SessionController>(
           create: (context) => SessionController(

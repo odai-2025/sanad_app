@@ -18,7 +18,8 @@ class AuthProvider extends ChangeNotifier {
   UserModel? get user => _user;
 
   Future<void> checkLoginStatus() async {
-    _isLoggedIn = await authRepository.isLoggedIn();
+    _isLoggedIn = false;
+    _user = null;
     notifyListeners();
   }
 
@@ -107,7 +108,8 @@ class AuthProvider extends ChangeNotifier {
 
       if (result['user'] != null && result['user'] is Map<String, dynamic>) {
         _user = UserModel.fromJson(result['user']);
-      } else if (result['data'] != null && result['data'] is Map<String, dynamic>) {
+      } else if (result['data'] != null &&
+          result['data'] is Map<String, dynamic>) {
         _user = UserModel.fromJson(result['data']);
       } else if (result is Map<String, dynamic>) {
         _user = UserModel.fromJson(result);
@@ -117,6 +119,8 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _user = null;
+      _isLoggedIn = false;
       notifyListeners();
     } finally {
       _setLoading(false);
@@ -129,15 +133,21 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       await authRepository.logout();
-      _user = null;
-      _isLoggedIn = false;
-      notifyListeners();
     } catch (e) {
       _errorMessage = e.toString().replaceFirst('Exception: ', '');
-      notifyListeners();
     } finally {
+      _user = null;
+      _isLoggedIn = false;
       _setLoading(false);
+      notifyListeners();
     }
+  }
+
+  void clearSessionLocally() {
+    _user = null;
+    _isLoggedIn = false;
+    _errorMessage = null;
+    notifyListeners();
   }
 
   void clearError() {

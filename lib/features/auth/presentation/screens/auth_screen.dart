@@ -111,7 +111,6 @@ class _AuthScreenState extends State<AuthScreen> {
         en: 'Invalid login data',
       );
     }
-
     if (!RegExp(r'^(77|78|71|73)\d{7}$').hasMatch(phone)) {
       return _t(
         s,
