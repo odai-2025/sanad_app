@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../../core/i18n/app_strings.dart';
 import '../../../../core/i18n/locale_controller.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../products/presentation/screens/products_screen.dart';
 import '../../../recharge/presentation/widgets/quick_recharge_sheet.dart';
 import '../../../transactions/presentation/screens/transactions_screen.dart';
@@ -73,10 +74,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final s = AppStrings.of(context);
+    final authProvider = context.watch<AuthProvider>();
+    final userName = authProvider.user?.firstName ?? authProvider.user?.phone ?? '';
 
     final pages = [
       _HomeTab(
         strings: s,
+        userName: userName,
         onQuickRechargeTap: (serviceName) {
           _openQuickRechargeSheet(
             context: context,
@@ -109,6 +113,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 );
               },
+            ),
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.account_circle_outlined),
+              color: AppColors.cardDark,
+              onSelected: (value) async {
+                if (value == 'logout') {
+                  await context.read<AuthProvider>().logout();
+                }
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem<String>(
+                  value: 'logout',
+                  child: Text('تسجيل الخروج'),
+                ),
+              ],
             ),
           ],
         ),
@@ -154,22 +173,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
 class _HomeTab extends StatelessWidget {
   final AppStrings strings;
+  final String userName;
   final void Function(String serviceName) onQuickRechargeTap;
 
   const _HomeTab({
     required this.strings,
+    required this.userName,
     required this.onQuickRechargeTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final welcomeText = userName.isNotEmpty
+        ? '${strings.welcome}، $userName'
+        : strings.welcome;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            strings.welcome,
+            welcomeText,
             style: const TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,

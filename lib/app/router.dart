@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/auth/presentation/providers/auth_provider.dart';
@@ -11,6 +12,10 @@ GoRouter createRouter(AuthProvider authProvider) {
     initialLocation: '/',
     refreshListenable: authProvider,
     redirect: (context, state) {
+      if (authProvider.isCheckingAuth) {
+        return null;
+      }
+
       final isLoggedIn = authProvider.isLoggedIn;
       final isAuthRoute =
           state.matchedLocation == '/' || state.matchedLocation == '/register';
@@ -28,7 +33,12 @@ GoRouter createRouter(AuthProvider authProvider) {
     routes: [
       GoRoute(
         path: '/',
-        builder: (context, state) => const LoginScreen(),
+        builder: (context, state) {
+          if (authProvider.isCheckingAuth) {
+            return const _AuthLoadingScreen();
+          }
+          return const LoginScreen();
+        },
       ),
       GoRoute(
         path: '/register',
@@ -47,4 +57,17 @@ GoRouter createRouter(AuthProvider authProvider) {
       ),
     ],
   );
+}
+
+class _AuthLoadingScreen extends StatelessWidget {
+  const _AuthLoadingScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+  }
 }

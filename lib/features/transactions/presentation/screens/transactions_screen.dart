@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-
+import '../../data/services/transactions_service.dart';
 import '../../../../core/i18n/app_strings.dart';
 import '../../../../core/theme/app_colors.dart';
 
@@ -12,62 +12,87 @@ class TransactionsScreen extends StatefulWidget {
 }
 
 class _TransactionsScreenState extends State<TransactionsScreen> {
-  String selectedFilter = 'all';
+  final TransactionsService _transactionsService = TransactionsService();
 
-  final List<Map<String, dynamic>> transactions = [
-    {
-      'id': '#TX1001',
-      'titleAr': 'شحن ببجي',
-      'titleEn': 'PUBG Top-up',
-      'amount': '4,500 YER',
-      'status': 'success',
-      'dateAr': '2026-05-15 12:20 ص',
-      'dateEn': '2026-05-15 12:20 AM',
-      'customerAr': 'أحمد',
-      'customerEn': 'Ahmed',
-    },
-    {
-      'id': '#TX1002',
-      'titleAr': 'شحن يمن موبايل',
-      'titleEn': 'Yemen Mobile Top-up',
-      'amount': '2,000 YER',
-      'status': 'pending',
-      'dateAr': '2026-05-15 12:35 ص',
-      'dateEn': '2026-05-15 12:35 AM',
-      'customerAr': 'محمد',
-      'customerEn': 'Mohammed',
-    },
-    {
-      'id': '#TX1003',
-      'titleAr': 'بطاقة جوجل بلاي',
-      'titleEn': 'Google Play Card',
-      'amount': '10 USD',
-      'status': 'success',
-      'dateAr': '2026-05-15 12:40 ص',
-      'dateEn': '2026-05-15 12:40 AM',
-      'customerAr': 'خالد',
-      'customerEn': 'Khaled',
-    },
-    {
-      'id': '#TX1004',
-      'titleAr': 'شحن فري فاير',
-      'titleEn': 'Free Fire Top-up',
-      'amount': '3,000 YER',
-      'status': 'pending',
-      'dateAr': '2026-05-15 12:50 ص',
-      'dateEn': '2026-05-15 12:50 AM',
-      'customerAr': 'ناصر',
-      'customerEn': 'Nasser',
-    },
-  ];
+  String selectedFilter = 'all';
+  bool _isLoading = true;
+  String? _errorMessage;
+  List<Map<String, dynamic>> _transactions = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTransactions();
+  }
+
+  Future<void> _loadTransactions() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    final result = await _transactionsService.getWalletTransactions();
+
+    if (!mounted) return;
+
+    if (result['success'] == true) {
+      final rawData = result['data'];
+      List<Map<String, dynamic>> transactionsList = [];
+
+      if (rawData is List) {
+        transactionsList = rawData
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+      } else if (rawData is Map<String, dynamic> && rawData['data'] is List) {
+        transactionsList = (rawData['data'] as List)
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+      }
+
+      setState(() {
+        _transactions = transactionsList;
+        _isLoading = false;
+      });
+    } else {
+      setState(() {
+        _errorMessage =
+            result['message']?.toString() ?? 'Failed to load transactions';
+        _isLoading = false;
+      });
+    }
+  }
+
+  String _mapStatus(dynamic value) {
+    final status = (value ?? '').toString().toLowerCase();
+
+    if (status == 'completed' || status == 'success') {
+      return 'success';
+    }
+
+    if (status == 'pending' || status == 'processing') {
+      return 'pending';
+    }
+
+    return 'other';
+  }
+
+  String _formatAmount(Map<String, dynamic> tx) {
+    final amount = tx['amount']?.toString() ?? '0';
+    final currency = tx['currency_code']?.toString() ?? 'YER';
+    return '$amount $currency';
+  }
 
   @override
   Widget build(BuildContext context) {
     final s = AppStrings.of(context);
 
     final filteredTransactions = selectedFilter == 'all'
-        ? transactions
-        : transactions.where((tx) => tx['status'] == selectedFilter).toList();
+        ? _transactions
+        : _transactions
+        .where((tx) => _mapStatus(tx['status']) == selectedFilter)
+        .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -110,149 +135,214 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         ),
         const SizedBox(height: 8),
         Expanded(
-          child: ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: filteredTransactions.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final tx = filteredTransactions[index];
-              final isSuccess = tx['status'] == 'success';
+          child: _buildBody(s, filteredTransactions),
+        ),
+      ],
+    );
+  }
 
-              final title = s.isArabic
-                  ? tx['titleAr'] as String
-                  : tx['titleEn'] as String;
+  Widget _buildBody(AppStrings s, List<Map<String, dynamic>> filteredTransactions) {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
 
-              final date = s.isArabic
-                  ? tx['dateAr'] as String
-                  : tx['dateEn'] as String;
+    if (_errorMessage != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.error_outline,
+                color: Colors.orange,
+                size: 42,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                _errorMessage!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _loadTransactions,
+                child: const Text('إعادة المحاولة'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
-              final customer = s.isArabic
-                  ? tx['customerAr'] as String
-                  : tx['customerEn'] as String;
+    if (filteredTransactions.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _loadTransactions,
+        child: ListView(
+          children: const [
+            SizedBox(height: 160),
+            Center(
+              child: Text(
+                'لا توجد حركات متاحة',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
-              final detailsData = {
-                'id': tx['id'],
-                'title': title,
-                'amount': tx['amount'],
-                'status': isSuccess ? s.successful : s.pending,
-                'date': date,
-                'customer': customer,
-              };
+    return RefreshIndicator(
+      onRefresh: _loadTransactions,
+      child: ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: filteredTransactions.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        itemBuilder: (context, index) {
+          final tx = filteredTransactions[index];
+          final normalizedStatus = _mapStatus(tx['status']);
+          final isSuccess = normalizedStatus == 'success';
+          final isPending = normalizedStatus == 'pending';
 
-              return InkWell(
+          final title = (tx['category'] ?? tx['type'] ?? 'Transaction').toString();
+          final date = (tx['created_at'] ?? '').toString();
+          final txId = (tx['reference_no'] ?? tx['id'] ?? '').toString();
+          final amount = _formatAmount(tx);
+
+          final detailsData = {
+            'id': txId,
+            'title': title,
+            'amount': amount,
+            'status': isSuccess
+                ? s.successful
+                : isPending
+                ? s.pending
+                : 'Other',
+            'date': date,
+            'customer': '',
+          };
+
+          final statusColor = isSuccess
+              ? AppColors.primaryGreen
+              : isPending
+              ? Colors.orange
+              : Colors.grey;
+
+          return InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () {
+              context.push('/transaction-details', extra: detailsData);
+            },
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.cardDark,
                 borderRadius: BorderRadius.circular(16),
-                onTap: () {
-                  context.push('/transaction-details', extra: detailsData);
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppColors.cardDark,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Column(
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                children: [
+                  Row(
                     children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 46,
-                            height: 46,
-                            decoration: BoxDecoration(
-                              color: (isSuccess
-                                  ? AppColors.primaryGreen
-                                  : Colors.orange)
-                                  .withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Icon(
-                              isSuccess
-                                  ? Icons.check_circle_outline
-                                  : Icons.schedule_outlined,
-                              color: isSuccess
-                                  ? AppColors.primaryGreen
-                                  : Colors.orange,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  title,
-                                  style: const TextStyle(
-                                    color: AppColors.textPrimary,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  tx['id'] as String,
-                                  style: const TextStyle(
-                                    color: AppColors.textSecondary,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: (isSuccess
-                                  ? AppColors.primaryGreen
-                                  : Colors.orange)
-                                  .withValues(alpha: 0.14),
-                              borderRadius: BorderRadius.circular(50),
-                            ),
-                            child: Text(
-                              isSuccess ? s.successful : s.pending,
-                              style: TextStyle(
-                                color: isSuccess
-                                    ? AppColors.primaryGreen
-                                    : Colors.orange,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
+                      Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          color: statusColor.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          isSuccess
+                              ? Icons.check_circle_outline
+                              : isPending
+                              ? Icons.schedule_outlined
+                              : Icons.info_outline,
+                          color: statusColor,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              date,
+                            const SizedBox(height: 4),
+                            Text(
+                              txId,
                               style: const TextStyle(
                                 color: AppColors.textSecondary,
-                                fontSize: 12,
+                                fontSize: 13,
                               ),
                             ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: statusColor.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(50),
+                        ),
+                        child: Text(
+                          isSuccess
+                              ? s.successful
+                              : isPending
+                              ? s.pending
+                              : 'Other',
+                          style: TextStyle(
+                            color: statusColor,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
                           ),
-                          Text(
-                            tx['amount'] as String,
-                            style: const TextStyle(
-                              color: AppColors.textPrimary,
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ],
                   ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          date,
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        amount,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }
