@@ -11,15 +11,39 @@ class TransactionsService {
   Future<Map<String, dynamic>> getWalletTransactions() async {
     try {
       final response = await _dioClient.get(ApiConfig.walletTransactions);
+      final responseData = response.data;
+
+      if (responseData is Map<String, dynamic>) {
+        return {
+          'success': true,
+          'data': responseData['data'] ?? [],
+          'message': responseData['message'],
+        };
+      }
+
+      if (responseData is List) {
+        return {
+          'success': true,
+          'data': responseData,
+          'message': null,
+        };
+      }
 
       return {
-        'success': true,
-        'data': response.data['data'] ?? [],
+        'success': false,
+        'message': 'Unexpected response format',
+        'data': [],
       };
     } on DioException catch (e) {
       return {
         'success': false,
         'message': _extractMessage(e),
+        'data': [],
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': e.toString(),
         'data': [],
       };
     }
@@ -32,8 +56,22 @@ class TransactionsService {
       if (data['message'] != null) {
         return data['message'].toString();
       }
+
       if (data['error'] != null) {
         return data['error'].toString();
+      }
+
+      if (data['errors'] is Map) {
+        final errors = data['errors'] as Map;
+        final firstValue = errors.values.isNotEmpty ? errors.values.first : null;
+
+        if (firstValue is List && firstValue.isNotEmpty) {
+          return firstValue.first.toString();
+        }
+
+        if (firstValue != null) {
+          return firstValue.toString();
+        }
       }
     }
 

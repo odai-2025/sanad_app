@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/i18n/app_strings.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/custom_app_bar.dart';
+
 class TransactionDetailsScreen extends StatelessWidget {
   final Map<String, dynamic> data;
 
@@ -11,18 +12,71 @@ class TransactionDetailsScreen extends StatelessWidget {
     required this.data,
   });
 
+  String _normalizeStatus(String status) {
+    final value = status.toLowerCase().trim();
+
+    if (value == 'ناجح' ||
+        value == 'successful' ||
+        value == 'success' ||
+        value == 'completed') {
+      return 'success';
+    }
+
+    if (value == 'معلق' ||
+        value == 'pending' ||
+        value == 'processing') {
+      return 'pending';
+    }
+
+    if (value == 'فاشلة' ||
+        value == 'failed' ||
+        value == 'cancelled' ||
+        value == 'rejected') {
+      return 'failed';
+    }
+
+    return 'other';
+  }
+
+  Color _statusColor(String normalizedStatus) {
+    switch (normalizedStatus) {
+      case 'success':
+        return AppColors.primaryGreen;
+      case 'pending':
+        return Colors.orange;
+      case 'failed':
+        return Colors.redAccent;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  IconData _statusIcon(String normalizedStatus) {
+    switch (normalizedStatus) {
+      case 'success':
+        return Icons.check_circle_outline;
+      case 'pending':
+        return Icons.schedule_outlined;
+      case 'failed':
+        return Icons.cancel_outlined;
+      default:
+        return Icons.info_outline;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = AppStrings.of(context);
-    final status = (data['status'] ?? s.unknown).toString();
-    final isSuccess = status == 'ناجح' || status == 'Successful' || status == s.successful;
+    final rawStatus = (data['status'] ?? s.unknown).toString();
+    final normalizedStatus = _normalizeStatus(rawStatus);
+    final statusColor = _statusColor(normalizedStatus);
 
     return Scaffold(
       appBar: CustomAppBar(
         title: s.transactionDetails,
         showBackButton: true,
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Container(
           width: double.infinity,
@@ -38,18 +92,16 @@ class TransactionDetailsScreen extends StatelessWidget {
               Row(
                 children: [
                   Icon(
-                    isSuccess
-                        ? Icons.check_circle_outline
-                        : Icons.schedule_outlined,
-                    color: isSuccess ? AppColors.primaryGreen : Colors.orange,
+                    _statusIcon(normalizedStatus),
+                    color: statusColor,
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    status,
+                    rawStatus,
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: isSuccess ? AppColors.primaryGreen : Colors.orange,
+                      color: statusColor,
                     ),
                   ),
                 ],
@@ -61,7 +113,7 @@ class TransactionDetailsScreen extends StatelessWidget {
               ),
               _DetailRow(
                 label: s.type,
-                value: (data['title'] ?? '-').toString(),
+                value: (data['title'] ?? data['type'] ?? '-').toString(),
               ),
               _DetailRow(
                 label: s.amount,
@@ -74,6 +126,14 @@ class TransactionDetailsScreen extends StatelessWidget {
               _DetailRow(
                 label: s.date,
                 value: (data['date'] ?? '-').toString(),
+              ),
+              _DetailRow(
+                label: s.isArabic ? 'التصنيف' : 'Category',
+                value: (data['category'] ?? '-').toString(),
+              ),
+              _DetailRow(
+                label: s.isArabic ? 'ملاحظات' : 'Notes',
+                value: (data['notes'] ?? '-').toString(),
               ),
             ],
           ),
@@ -97,6 +157,7 @@ class _DetailRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
             width: 110,
@@ -110,7 +171,7 @@ class _DetailRow extends StatelessWidget {
           ),
           Expanded(
             child: Text(
-              value,
+              value.isEmpty ? '-' : value,
               style: const TextStyle(
                 color: AppColors.textPrimary,
                 fontSize: 15,

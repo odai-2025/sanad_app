@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../data/services/transactions_service.dart';
+
 import '../../../../core/i18n/app_strings.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../data/services/transactions_service.dart';
 
 class TransactionsScreen extends StatefulWidget {
   const TransactionsScreen({super.key});
@@ -31,40 +32,51 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       _errorMessage = null;
     });
 
-    final result = await _transactionsService.getWalletTransactions();
+    try {
+      final result = await _transactionsService.getWalletTransactions();
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    if (result['success'] == true) {
-      final rawData = result['data'];
-      List<Map<String, dynamic>> transactionsList = [];
+      if (result['success'] == true) {
+        final rawData = result['data'];
+        List<Map<String, dynamic>> transactionsList = [];
 
-      if (rawData is List) {
-        transactionsList = rawData
-            .whereType<Map>()
-            .map((item) => Map<String, dynamic>.from(item))
-            .toList();
-      } else if (rawData is Map<String, dynamic> && rawData['data'] is List) {
-        transactionsList = (rawData['data'] as List)
-            .whereType<Map>()
-            .map((item) => Map<String, dynamic>.from(item))
-            .toList();
+        if (rawData is List) {
+          transactionsList = rawData
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList();
+        } else if (rawData is Map<String, dynamic> && rawData['data'] is List) {
+          transactionsList = (rawData['data'] as List)
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList();
+        }
+
+        setState(() {
+          _transactions = transactionsList;
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _transactions = [];
+          _errorMessage =
+              result['message']?.toString() ?? 'Failed to load transactions';
+          _isLoading = false;
+        });
       }
+    } catch (e) {
+      if (!mounted) return;
 
       setState(() {
-        _transactions = transactionsList;
-        _isLoading = false;
-      });
-    } else {
-      setState(() {
-        _errorMessage =
-            result['message']?.toString() ?? 'Failed to load transactions';
+        _transactions = [];
+        _errorMessage = e.toString();
         _isLoading = false;
       });
     }
   }
 
-  String _mapStatus(dynamic value) {
+  String _normalizedStatus(dynamic value) {
     final status = (value ?? '').toString().toLowerCase();
 
     if (status == 'completed' || status == 'success') {
@@ -75,13 +87,71 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       return 'pending';
     }
 
+    if (status == 'failed' || status == 'cancelled' || status == 'rejected') {
+      return 'failed';
+    }
+
     return 'other';
+  }
+
+  String _statusText(String normalizedStatus, AppStrings s) {
+    switch (normalizedStatus) {
+      case 'success':
+        return s.successful;
+      case 'pending':
+        return s.pending;
+      case 'failed':
+        return s.isArabic ? 'فاشلة' : 'Failed';
+      default:
+        return s.isArabic ? 'أخرى' : 'Other';
+    }
+  }
+
+  Color _statusColor(String normalizedStatus) {
+    switch (normalizedStatus) {
+      case 'success':
+        return AppColors.primaryGreen;
+      case 'pending':
+        return Colors.orange;
+      case 'failed':
+        return Colors.redAccent;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  IconData _statusIcon(String normalizedStatus) {
+    switch (normalizedStatus) {
+      case 'success':
+        return Icons.check_circle_outline;
+      case 'pending':
+        return Icons.schedule_outlined;
+      case 'failed':
+        return Icons.cancel_outlined;
+      default:
+        return Icons.info_outline;
+    }
   }
 
   String _formatAmount(Map<String, dynamic> tx) {
     final amount = tx['amount']?.toString() ?? '0';
     final currency = tx['currency_code']?.toString() ?? 'YER';
     return '$amount $currency';
+  }
+
+  String _titleFromTransaction(Map<String, dynamic> tx, AppStrings s) {
+    final category = tx['category']?.toString().trim();
+    final type = tx['type']?.toString().trim();
+
+    if (category != null && category.isNotEmpty) {
+      return category;
+    }
+
+    if (type != null && type.isNotEmpty) {
+      return type;
+    }
+
+    return s.isArabic ? 'عملية' : 'Transaction';
   }
 
   @override
@@ -91,7 +161,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     final filteredTransactions = selectedFilter == 'all'
         ? _transactions
         : _transactions
-        .where((tx) => _mapStatus(tx['status']) == selectedFilter)
+        .where((tx) => _normalizedStatus(tx['status']) == selectedFilter)
         .toList();
 
     return Column(
@@ -130,6 +200,12 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 selected: selectedFilter == 'pending',
                 onTap: () => setState(() => selectedFilter = 'pending'),
               ),
+              const SizedBox(width: 8),
+              _FilterChip(
+                label: s.isArabic ? 'فاشلة' : 'Failed',
+                selected: selectedFilter == 'failed',
+                onTap: () => setState(() => selectedFilter = 'failed'),
+              ),
             ],
           ),
         ),
@@ -141,7 +217,10 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     );
   }
 
-  Widget _buildBody(AppStrings s, List<Map<String, dynamic>> filteredTransactions) {
+  Widget _buildBody(
+      AppStrings s,
+      List<Map<String, dynamic>> filteredTransactions,
+      ) {
     if (_isLoading) {
       return const Center(
         child: CircularProgressIndicator(),
@@ -149,32 +228,36 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     }
 
     if (_errorMessage != null) {
-      return Center(
-        child: Padding(
+      return RefreshIndicator(
+        onRefresh: _loadTransactions,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.error_outline,
-                color: Colors.orange,
-                size: 42,
+          children: [
+            const SizedBox(height: 120),
+            const Icon(
+              Icons.error_outline,
+              color: Colors.orange,
+              size: 42,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              _errorMessage!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
               ),
-              const SizedBox(height: 12),
-              Text(
-                _errorMessage!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
+            ),
+            const SizedBox(height: 16),
+            Center(
+              child: ElevatedButton(
+                onPressed: _loadTransactions,
+                child: Text(
+                  s.isArabic ? 'إعادة المحاولة' : 'Retry',
                 ),
               ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: _loadTransactions,
-                child: const Text('إعادة المحاولة'),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       );
     }
@@ -183,15 +266,24 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       return RefreshIndicator(
         onRefresh: _loadTransactions,
         child: ListView(
-          children: const [
-            SizedBox(height: 160),
-            Center(
-              child: Text(
-                'لا توجد حركات متاحة',
-                style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 14,
-                ),
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(24),
+          children: [
+            const SizedBox(height: 140),
+            Icon(
+              Icons.receipt_long_outlined,
+              color: AppColors.textSecondary.withValues(alpha: 0.7),
+              size: 46,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              s.isArabic
+                  ? 'لا توجد حركات متاحة'
+                  : 'No transactions available',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 14,
               ),
             ),
           ],
@@ -202,16 +294,17 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     return RefreshIndicator(
       onRefresh: _loadTransactions,
       child: ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         itemCount: filteredTransactions.length,
         separatorBuilder: (_, __) => const SizedBox(height: 12),
         itemBuilder: (context, index) {
           final tx = filteredTransactions[index];
-          final normalizedStatus = _mapStatus(tx['status']);
-          final isSuccess = normalizedStatus == 'success';
-          final isPending = normalizedStatus == 'pending';
+          final normalizedStatus = _normalizedStatus(tx['status']);
+          final statusColor = _statusColor(normalizedStatus);
+          final statusLabel = _statusText(normalizedStatus, s);
 
-          final title = (tx['category'] ?? tx['type'] ?? 'Transaction').toString();
+          final title = _titleFromTransaction(tx, s);
           final date = (tx['created_at'] ?? '').toString();
           final txId = (tx['reference_no'] ?? tx['id'] ?? '').toString();
           final amount = _formatAmount(tx);
@@ -220,20 +313,13 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
             'id': txId,
             'title': title,
             'amount': amount,
-            'status': isSuccess
-                ? s.successful
-                : isPending
-                ? s.pending
-                : 'Other',
+            'status': statusLabel,
             'date': date,
-            'customer': '',
+            'customer': (tx['customer_name'] ?? '').toString(),
+            'type': (tx['type'] ?? '').toString(),
+            'category': (tx['category'] ?? '').toString(),
+            'notes': (tx['notes'] ?? '').toString(),
           };
-
-          final statusColor = isSuccess
-              ? AppColors.primaryGreen
-              : isPending
-              ? Colors.orange
-              : Colors.grey;
 
           return InkWell(
             borderRadius: BorderRadius.circular(16),
@@ -259,11 +345,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(
-                          isSuccess
-                              ? Icons.check_circle_outline
-                              : isPending
-                              ? Icons.schedule_outlined
-                              : Icons.info_outline,
+                          _statusIcon(normalizedStatus),
                           color: statusColor,
                         ),
                       ),
@@ -301,11 +383,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                           borderRadius: BorderRadius.circular(50),
                         ),
                         child: Text(
-                          isSuccess
-                              ? s.successful
-                              : isPending
-                              ? s.pending
-                              : 'Other',
+                          statusLabel,
                           style: TextStyle(
                             color: statusColor,
                             fontSize: 12,

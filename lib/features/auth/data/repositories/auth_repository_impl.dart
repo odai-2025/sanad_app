@@ -1,5 +1,5 @@
-import '../../domain/repositories/auth_repository.dart';
-import '../services/auth_service.dart';
+import 'package:sanad_app/features/auth/domain/repositories/auth_repository.dart';
+import 'package:sanad_app/features/auth/data/services/auth_service.dart';
 
 class AuthRepositoryImpl implements AuthRepository {
   final AuthService authService;
@@ -10,8 +10,8 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<Map<String, dynamic>> login({
     required String phone,
     required String password,
-  }) {
-    return authService.login(
+  }) async {
+    return await authService.login(
       phone: phone,
       password: password,
     );
@@ -29,8 +29,8 @@ class AuthRepositoryImpl implements AuthRepository {
     String? email,
     required String password,
     required String passwordConfirmation,
-  }) {
-    return authService.register(
+  }) async {
+    return await authService.register(
       firstName: firstName,
       secondName: secondName,
       thirdName: thirdName,
@@ -45,17 +45,17 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> getCurrentUser() {
-    return authService.getCurrentUser();
+  Future<Map<String, dynamic>> getCurrentUser() async {
+    return await authService.getCurrentUser();
   }
 
   @override
-  Future<Map<String, dynamic>> logout() {
-    return authService.logout();
+  Future<Map<String, dynamic>> logout() async {
+    return await authService.logout();
   }
 
   @override
-  Future<bool> isLoggedIn() {
-    return authService.isLoggedIn();
+  Future<bool> isLoggedIn() async {
+    return await authService.isLoggedIn();
   }
 }

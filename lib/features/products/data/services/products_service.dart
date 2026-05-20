@@ -11,16 +11,36 @@ class ProductsService {
   Future<Map<String, dynamic>> getCategories() async {
     try {
       final response = await _dioClient.get(ApiConfig.categories);
+      final responseData = response.data;
+
+      List<Map<String, dynamic>> categories = [];
+
+      if (responseData is Map<String, dynamic>) {
+        final data = responseData['data'];
+
+        if (data is List) {
+          categories = data
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList();
+        }
+      }
 
       return {
         'success': true,
-        'data': response.data['data'] ?? [],
+        'data': categories,
       };
     } on DioException catch (e) {
       return {
         'success': false,
         'message': _extractMessage(e),
-        'data': [],
+        'data': <Map<String, dynamic>>[],
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': e.toString(),
+        'data': <Map<String, dynamic>>[],
       };
     }
   }
@@ -45,15 +65,35 @@ class ProductsService {
         queryParameters: query,
       );
 
+      final responseData = response.data;
+      List<Map<String, dynamic>> services = [];
+
+      if (responseData is Map<String, dynamic>) {
+        final data = responseData['data'];
+
+        if (data is List) {
+          services = data
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList();
+        }
+      }
+
       return {
         'success': true,
-        'data': response.data['data'] ?? [],
+        'data': services,
       };
     } on DioException catch (e) {
       return {
         'success': false,
         'message': _extractMessage(e),
-        'data': [],
+        'data': <Map<String, dynamic>>[],
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': e.toString(),
+        'data': <Map<String, dynamic>>[],
       };
     }
   }
@@ -64,15 +104,32 @@ class ProductsService {
         ApiConfig.serviceDetails(serviceId),
       );
 
+      final responseData = response.data;
+      Map<String, dynamic> service = {};
+
+      if (responseData is Map<String, dynamic>) {
+        final data = responseData['data'];
+
+        if (data is Map<String, dynamic>) {
+          service = Map<String, dynamic>.from(data);
+        }
+      }
+
       return {
         'success': true,
-        'data': response.data['data'] ?? {},
+        'data': service,
       };
     } on DioException catch (e) {
       return {
         'success': false,
         'message': _extractMessage(e),
-        'data': {},
+        'data': <String, dynamic>{},
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': e.toString(),
+        'data': <String, dynamic>{},
       };
     }
   }
@@ -84,8 +141,20 @@ class ProductsService {
       if (data['message'] != null) {
         return data['message'].toString();
       }
+
       if (data['error'] != null) {
         return data['error'].toString();
+      }
+
+      if (data['errors'] is Map) {
+        final errors = data['errors'] as Map;
+        if (errors.isNotEmpty) {
+          final firstError = errors.values.first;
+          if (firstError is List && firstError.isNotEmpty) {
+            return firstError.first.toString();
+          }
+          return firstError.toString();
+        }
       }
     }
 

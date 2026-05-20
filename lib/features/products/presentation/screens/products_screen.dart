@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../data/services/products_service.dart';
+import '../../../recharge/presentation/widgets/quick_recharge_sheet.dart';
 import '../../../../core/i18n/app_strings.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/custom_app_bar.dart';
@@ -68,7 +69,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
       });
     } else {
       setState(() {
-        _errorMessage = result['message']?.toString() ?? 'Failed to load services';
+        _errorMessage =
+            result['message']?.toString() ?? 'Failed to load services';
         _isLoading = false;
       });
     }
@@ -97,7 +99,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
     final normalized = value.toLowerCase();
 
     if (normalized.contains('pubg')) return Icons.sports_esports;
-    if (normalized.contains('free fire')) return Icons.local_fire_department_outlined;
+    if (normalized.contains('free fire')) {
+      return Icons.local_fire_department_outlined;
+    }
     if (normalized.contains('itunes')) return Icons.card_giftcard;
     if (normalized.contains('google play')) return Icons.play_circle_outline;
     if (normalized.contains('yemen')) return Icons.phone_android;
@@ -108,6 +112,34 @@ class _ProductsScreenState extends State<ProductsScreen> {
     if (normalized.contains('gift')) return Icons.card_giftcard;
 
     return Icons.apps_rounded;
+  }
+
+  Future<void> _openQuickRecharge(Map<String, dynamic> item) async {
+    final serviceId = item['id'];
+    if (serviceId == null) return;
+
+    final s = AppStrings.of(context);
+    final title = s.isArabic
+        ? (item['name_ar'] ?? item['name_en'] ?? 'Service').toString()
+        : (item['name_en'] ?? item['name_ar'] ?? 'Service').toString();
+
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => QuickRechargeSheet(
+        serviceId: int.tryParse(serviceId.toString()) ?? 0,
+        serviceName: title,
+      ),
+    );
+
+    if (result == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تم إرسال الطلب بنجاح'),
+        ),
+      );
+    }
   }
 
   @override
@@ -228,54 +260,58 @@ class _ProductsScreenState extends State<ProductsScreen> {
               ? (item['name_ar'] ?? item['name_en'] ?? 'Service').toString()
               : (item['name_en'] ?? item['name_ar'] ?? 'Service').toString();
 
-          final subtitle = (item['service_type'] ?? item['input_type'] ?? '')
-              .toString();
+          final subtitle =
+          (item['service_type'] ?? item['input_type'] ?? '').toString();
 
           final icon = _resolveIcon(title);
 
-          return Container(
-            decoration: BoxDecoration(
-              color: AppColors.cardDark,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: AppColors.border),
-            ),
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 54,
-                  height: 54,
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryBlue.withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(16),
+          return InkWell(
+            onTap: () => _openQuickRecharge(item),
+            borderRadius: BorderRadius.circular(18),
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.cardDark,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: AppColors.border),
+              ),
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryBlue.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Icon(
+                      icon,
+                      color: AppColors.primaryBlue,
+                      size: 28,
+                    ),
                   ),
-                  child: Icon(
-                    icon,
-                    color: AppColors.primaryBlue,
-                    size: 28,
+                  const SizedBox(height: 12),
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
+                  const SizedBox(height: 6),
+                  Text(
+                    subtitle,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  subtitle,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           );
         },

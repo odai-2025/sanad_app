@@ -1,63 +1,188 @@
 import 'package:flutter/material.dart';
-import '../../../../core/widgets/custom_app_bar.dart';
 
 import '../../../../core/i18n/app_strings.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/custom_app_bar.dart';
+import '../../data/services/wallet_service.dart';
+import '../../../recharge/data/services/recharge_service.dart';
 
-class WalletTopupScreen extends StatelessWidget {
+class WalletTopupScreen extends StatefulWidget {
   const WalletTopupScreen({super.key});
+
+  @override
+  State<WalletTopupScreen> createState() => _WalletTopupScreenState();
+}
+
+class _WalletTopupScreenState extends State<WalletTopupScreen> {
+  final WalletService _walletService = WalletService();
+  final RechargeService _rechargeService = RechargeService();
+
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  Map<String, dynamic> _wallet = {};
+  List<Map<String, dynamic>> _topupMethods = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadWalletData();
+  }
+
+  Future<void> _loadWalletData() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final walletResult = await _walletService.getWallet();
+      final methodsResult = await _rechargeService.getTopupMethods();
+
+      if (!mounted) return;
+
+      final hasWalletSuccess = walletResult['success'] == true;
+      final hasMethodsSuccess = methodsResult['success'] == true;
+
+      final walletData = walletResult['data'];
+      final methodsData = methodsResult['data'];
+
+      List<Map<String, dynamic>> parsedMethods = [];
+
+      if (methodsData is List) {
+        parsedMethods = methodsData
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+      }
+
+      setState(() {
+        _wallet = walletData is Map
+            ? Map<String, dynamic>.from(walletData)
+            : <String, dynamic>{};
+
+        _topupMethods = parsedMethods;
+        _isLoading = false;
+
+        if (!hasWalletSuccess && !hasMethodsSuccess) {
+          _errorMessage = walletResult['message']?.toString() ??
+              methodsResult['message']?.toString() ??
+              'Failed to load wallet data';
+        } else if (!hasWalletSuccess) {
+          _errorMessage = walletResult['message']?.toString();
+        } else if (!hasMethodsSuccess) {
+          _errorMessage = methodsResult['message']?.toString();
+        } else {
+          _errorMessage = null;
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _wallet = {};
+        _topupMethods = [];
+        _isLoading = false;
+        _errorMessage = e.toString();
+      });
+    }
+  }
+
+  String _walletBalance() {
+    final balance = _wallet['balance'];
+    final currency = (_wallet['currency_code'] ?? 'YER').toString();
+
+    if (balance == null) return '0.00 $currency';
+    return '${balance.toString()} $currency';
+  }
+
+  String _methodTitle(Map<String, dynamic> method, AppStrings s) {
+    final ar = method['name_ar']?.toString().trim();
+    final en = method['name_en']?.toString().trim();
+    final name = method['name']?.toString().trim();
+
+    if (s.isArabic) {
+      if (ar != null && ar.isNotEmpty) return ar;
+      if (name != null && name.isNotEmpty) return name;
+      return en ?? '';
+    }
+
+    if (en != null && en.isNotEmpty) return en;
+    if (name != null && name.isNotEmpty) return name;
+    return ar ?? '';
+  }
+
+  String _methodSubtitle(Map<String, dynamic> method, AppStrings s) {
+    final instructions = method['instructions']?.toString().trim();
+    final accountName = method['account_name']?.toString().trim();
+    final accountNumber = method['account_number']?.toString().trim();
+
+    if (instructions != null && instructions.isNotEmpty) {
+      return instructions;
+    }
+
+    if (accountName != null && accountName.isNotEmpty) {
+      if (accountNumber != null && accountNumber.isNotEmpty) {
+        return '$accountName - $accountNumber';
+      }
+      return accountName;
+    }
+
+    return s.isArabic ? 'طريقة شحن متاحة' : 'Available top-up method';
+  }
+
+  IconData _resolveMethodIcon(Map<String, dynamic> method) {
+    final code = (method['code'] ?? '').toString().toLowerCase();
+    final type = (method['type'] ?? '').toString().toLowerCase();
+    final nameAr = (method['name_ar'] ?? '').toString().toLowerCase();
+    final nameEn = (method['name_en'] ?? '').toString().toLowerCase();
+
+    final joined = '$code $type $nameAr $nameEn';
+
+    if (joined.contains('jeeb')) return Icons.account_balance_wallet_outlined;
+    if (joined.contains('wallet')) return Icons.account_balance_wallet_outlined;
+    if (joined.contains('bank')) return Icons.account_balance_outlined;
+    if (joined.contains('cash')) return Icons.storefront_outlined;
+
+    return Icons.payments_outlined;
+  }
+
+  Color _resolveMethodColor(Map<String, dynamic> method) {
+    final code = (method['code'] ?? '').toString().toLowerCase();
+    final type = (method['type'] ?? '').toString().toLowerCase();
+    final name = '${method['name_ar'] ?? ''} ${method['name_en'] ?? ''}'
+        .toLowerCase();
+
+    if (code.contains('jeeb') || name.contains('جيب')) {
+      return AppColors.primaryGreen;
+    }
+
+    if (type.contains('bank') ||
+        name.contains('bank') ||
+        name.contains('بنك')) {
+      return AppColors.primaryBlue;
+    }
+
+    return AppColors.primaryBlue;
+  }
 
   @override
   Widget build(BuildContext context) {
     final s = AppStrings.of(context);
 
-    final walletMethods = [
-      {
-        'titleAr': 'جيب',
-        'titleEn': 'Jeeb',
-        'subtitleAr': 'تحويل فوري إلى رصيد التطبيق',
-        'subtitleEn': 'Instant transfer to app balance',
-        'icon': Icons.account_balance_wallet_outlined,
-        'color': AppColors.primaryGreen,
-      },
-      {
-        'titleAr': 'بنك اليمن الكويتي',
-        'titleEn': 'Yemen Kuwait Bank',
-        'subtitleAr': 'شحن عبر خدمة البنك',
-        'subtitleEn': 'Top-up via bank service',
-        'icon': Icons.account_balance_outlined,
-        'color': AppColors.primaryBlue,
-      },
-    ];
-
-    final walletHistory = [
-      {
-        'titleAr': 'شحن عبر جيب',
-        'titleEn': 'Top-up via Jeeb',
-        'amount': '100,000 YER',
-        'dateAr': '2026-05-15 12:10 ص',
-        'dateEn': '2026-05-15 12:10 AM',
-        'status': 'success',
-      },
-      {
-        'titleAr': 'شحن عبر بنك اليمن الكويتي',
-        'titleEn': 'Top-up via Yemen Kuwait Bank',
-        'amount': '50,000 YER',
-        'dateAr': '2026-05-14 08:30 م',
-        'dateEn': '2026-05-14 08:30 PM',
-        'status': 'pending',
-      },
-    ];
-
     return Scaffold(
       appBar: CustomAppBar(
         title: s.wallet,
-        showBackButton: true,
+        showBackButton: false,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      body: RefreshIndicator(
+        onRefresh: _loadWalletData,
+        child: _isLoading
+            ? const Center(
+          child: CircularProgressIndicator(),
+        )
+            : ListView(
+          padding: const EdgeInsets.all(16),
           children: [
             Text(
               s.wallet,
@@ -87,9 +212,9 @@ class WalletTopupScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    '450,000 YER',
-                    style: TextStyle(
+                  Text(
+                    _walletBalance(),
+                    style: const TextStyle(
                       color: AppColors.textPrimary,
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
@@ -98,6 +223,26 @@ class WalletTopupScreen extends StatelessWidget {
                 ],
               ),
             ),
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: Colors.orange.withValues(alpha: 0.30),
+                  ),
+                ),
+                child: Text(
+                  _errorMessage!,
+                  style: const TextStyle(
+                    color: Colors.orange,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 22),
             Text(
               s.walletTopup,
@@ -108,57 +253,49 @@ class WalletTopupScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-            ...walletMethods.map((method) {
-              final title = s.isArabic
-                  ? method['titleAr'] as String
-                  : method['titleEn'] as String;
-
-              final subtitle = s.isArabic
-                  ? method['subtitleAr'] as String
-                  : method['subtitleEn'] as String;
-
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _WalletMethodCard(
-                  title: title,
-                  subtitle: subtitle,
-                  icon: method['icon'] as IconData,
-                  color: method['color'] as Color,
-                  buttonText: s.topup,
+            if (_topupMethods.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.cardDark,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: AppColors.border),
                 ),
-              );
-            }),
+                child: Text(
+                  s.isArabic
+                      ? 'لا توجد وسائل شحن متاحة حالياً'
+                      : 'No top-up methods available right now',
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              )
+            else
+              ..._topupMethods.map((method) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _WalletMethodCard(
+                    title: _methodTitle(method, s),
+                    subtitle: _methodSubtitle(method, s),
+                    icon: _resolveMethodIcon(method),
+                    color: _resolveMethodColor(method),
+                    buttonText: s.topup,
+                    onTap: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            s.isArabic
+                                ? 'سيتم ربط إنشاء طلب الشحن الحقيقي في الخطوة التالية'
+                                : 'Real top-up request creation will be connected in the next step',
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              }),
             const SizedBox(height: 10),
-            Text(
-              s.lastTopups,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 12),
-            ...walletHistory.map((item) {
-              final title = s.isArabic
-                  ? item['titleAr'] as String
-                  : item['titleEn'] as String;
-
-              final date = s.isArabic
-                  ? item['dateAr'] as String
-                  : item['dateEn'] as String;
-
-              final isSuccess = item['status'] == 'success';
-
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _WalletHistoryCard(
-                  title: title,
-                  amount: item['amount'] as String,
-                  date: date,
-                  status: isSuccess ? s.successful : s.pending,
-                ),
-              );
-            }),
           ],
         ),
       ),
@@ -172,6 +309,7 @@ class _WalletMethodCard extends StatelessWidget {
   final IconData icon;
   final Color color;
   final String buttonText;
+  final VoidCallback onTap;
 
   const _WalletMethodCard({
     required this.title,
@@ -179,6 +317,7 @@ class _WalletMethodCard extends StatelessWidget {
     required this.icon,
     required this.color,
     required this.buttonText,
+    required this.onTap,
   });
 
   @override
@@ -229,101 +368,12 @@ class _WalletMethodCard extends StatelessWidget {
                 Align(
                   alignment: AlignmentDirectional.centerStart,
                   child: ElevatedButton(
-                    onPressed: () {},
+                    onPressed: onTap,
                     child: Text(buttonText),
                   ),
                 ),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _WalletHistoryCard extends StatelessWidget {
-  final String title;
-  final String amount;
-  final String date;
-  final String status;
-
-  const _WalletHistoryCard({
-    required this.title,
-    required this.amount,
-    required this.date,
-    required this.status,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final s = AppStrings.of(context);
-    final isSuccess = status == s.successful;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.cardDark,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                amount,
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  date,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: (isSuccess ? AppColors.primaryGreen : Colors.orange)
-                      .withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(50),
-                ),
-                child: Text(
-                  status,
-                  style: TextStyle(
-                    color: isSuccess ? AppColors.primaryGreen : Colors.orange,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            ],
           ),
         ],
       ),

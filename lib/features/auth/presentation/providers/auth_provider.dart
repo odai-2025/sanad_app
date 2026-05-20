@@ -7,7 +7,9 @@ class AuthProvider extends ChangeNotifier {
   final AuthRepository authRepository;
   final TokenStorage _tokenStorage = TokenStorage();
 
-  AuthProvider(this.authRepository);
+  AuthProvider({
+    required this.authRepository,
+  });
 
   bool _isLoading = false;
   bool _isLoggedIn = false;
@@ -36,19 +38,14 @@ class AuthProvider extends ChangeNotifier {
       }
 
       final result = await authRepository.getCurrentUser();
-
-      if (result['user'] != null && result['user'] is Map<String, dynamic>) {
-        _user = UserModel.fromJson(result['user']);
-      } else if (result['data'] != null &&
-          result['data'] is Map<String, dynamic>) {
-        _user = UserModel.fromJson(result['data']);
-      } else if (result is Map<String, dynamic>) {
-        _user = UserModel.fromJson(result);
-      }
-
+      _user = _extractUserFromResponse(result);
       _isLoggedIn = _user != null;
+
+      if (!_isLoggedIn) {
+        await _tokenStorage.deleteToken();
+      }
     } catch (e) {
-      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _errorMessage = _cleanError(e);
       _user = null;
       _isLoggedIn = false;
       await _tokenStorage.deleteToken();
@@ -71,19 +68,14 @@ class AuthProvider extends ChangeNotifier {
         password: password,
       );
 
+      _user = _extractUserFromResponse(result);
       _isLoggedIn = true;
-
-      if (result['user'] != null && result['user'] is Map<String, dynamic>) {
-        _user = UserModel.fromJson(result['user']);
-      } else if (result['data'] != null &&
-          result['data'] is Map<String, dynamic>) {
-        _user = UserModel.fromJson(result['data']);
-      }
-
       notifyListeners();
       return true;
     } catch (e) {
-      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _errorMessage = _cleanError(e);
+      _user = null;
+      _isLoggedIn = false;
       notifyListeners();
       return false;
     } finally {
@@ -120,19 +112,14 @@ class AuthProvider extends ChangeNotifier {
         passwordConfirmation: passwordConfirmation,
       );
 
+      _user = _extractUserFromResponse(result);
       _isLoggedIn = true;
-
-      if (result['user'] != null && result['user'] is Map<String, dynamic>) {
-        _user = UserModel.fromJson(result['user']);
-      } else if (result['data'] != null &&
-          result['data'] is Map<String, dynamic>) {
-        _user = UserModel.fromJson(result['data']);
-      }
-
       notifyListeners();
       return true;
     } catch (e) {
-      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _errorMessage = _cleanError(e);
+      _user = null;
+      _isLoggedIn = false;
       notifyListeners();
       return false;
     } finally {
@@ -146,20 +133,16 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       final result = await authRepository.getCurrentUser();
+      _user = _extractUserFromResponse(result);
+      _isLoggedIn = _user != null;
 
-      if (result['user'] != null && result['user'] is Map<String, dynamic>) {
-        _user = UserModel.fromJson(result['user']);
-      } else if (result['data'] != null &&
-          result['data'] is Map<String, dynamic>) {
-        _user = UserModel.fromJson(result['data']);
-      } else if (result is Map<String, dynamic>) {
-        _user = UserModel.fromJson(result);
+      if (!_isLoggedIn) {
+        _errorMessage = 'Unable to load current user';
       }
 
-      _isLoggedIn = true;
       notifyListeners();
     } catch (e) {
-      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _errorMessage = _cleanError(e);
       _user = null;
       _isLoggedIn = false;
       notifyListeners();
@@ -175,7 +158,7 @@ class AuthProvider extends ChangeNotifier {
     try {
       await authRepository.logout();
     } catch (e) {
-      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _errorMessage = _cleanError(e);
     } finally {
       _user = null;
       _isLoggedIn = false;
@@ -186,17 +169,54 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  void clearSessionLocally() {
+  Future<void> clearSessionLocally() async {
     _user = null;
     _isLoggedIn = false;
     _errorMessage = null;
     _isCheckingAuth = false;
+    await _tokenStorage.deleteToken();
     notifyListeners();
   }
 
   void clearError() {
     _errorMessage = null;
     notifyListeners();
+  }
+
+  UserModel? _extractUserFromResponse(Map<String, dynamic> result) {
+    try {
+      if (result['user'] is Map<String, dynamic>) {
+        return UserModel.fromJson(
+          Map<String, dynamic>.from(result['user']),
+        );
+      }
+
+      if (result['data'] is Map<String, dynamic>) {
+        final data = Map<String, dynamic>.from(result['data']);
+
+        if (data['user'] is Map<String, dynamic>) {
+          return UserModel.fromJson(
+            Map<String, dynamic>.from(data['user']),
+          );
+        }
+
+        if (data.containsKey('id')) {
+          return UserModel.fromJson(data);
+        }
+      }
+
+      if (result.containsKey('id')) {
+        return UserModel.fromJson(result);
+      }
+
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _cleanError(Object e) {
+    return e.toString().replaceFirst('Exception: ', '');
   }
 
   void _setLoading(bool value) {

@@ -24,18 +24,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
   static final GlobalKey<NavigatorState> navigatorKey =
   GlobalKey<NavigatorState>();
 
-  void _openQuickRechargeSheet({
+  Future<void> _openQuickRechargeSheet({
     required BuildContext context,
+    required int serviceId,
     required String serviceName,
-  }) {
-    showModalBottomSheet(
+  }) async {
+    final result = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => QuickRechargeSheet(
+        serviceId: serviceId,
         serviceName: serviceName,
       ),
     );
+
+    if (!mounted) return;
+
+    if (result == true) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('تم إرسال طلب $serviceName بنجاح'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
   }
 
   Future<void> _handleBackPressed() async {
@@ -75,15 +89,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     final s = AppStrings.of(context);
     final authProvider = context.watch<AuthProvider>();
-    final userName = authProvider.user?.firstName ?? authProvider.user?.phone ?? '';
+    final userName =
+        authProvider.user?.firstName ?? authProvider.user?.phone ?? '';
 
     final pages = [
       _HomeTab(
         strings: s,
         userName: userName,
-        onQuickRechargeTap: (serviceName) {
+        onQuickRechargeTap: ({
+          required int serviceId,
+          required String serviceName,
+        }) {
           _openQuickRechargeSheet(
             context: context,
+            serviceId: serviceId,
             serviceName: serviceName,
           );
         },
@@ -174,7 +193,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 class _HomeTab extends StatelessWidget {
   final AppStrings strings;
   final String userName;
-  final void Function(String serviceName) onQuickRechargeTap;
+  final void Function({
+  required int serviceId,
+  required String serviceName,
+  }) onQuickRechargeTap;
 
   const _HomeTab({
     required this.strings,
@@ -281,32 +303,50 @@ class _HomeTab extends StatelessWidget {
               _QuickActionCard(
                 title: 'PUBG',
                 icon: Icons.sports_esports,
-                onTap: () => onQuickRechargeTap('PUBG'),
+                onTap: () => onQuickRechargeTap(
+                  serviceId: 1,
+                  serviceName: 'PUBG',
+                ),
               ),
               _QuickActionCard(
                 title: 'Free Fire',
                 icon: Icons.local_fire_department_outlined,
-                onTap: () => onQuickRechargeTap('Free Fire'),
+                onTap: () => onQuickRechargeTap(
+                  serviceId: 2,
+                  serviceName: 'Free Fire',
+                ),
               ),
               _QuickActionCard(
                 title: 'iTunes',
                 icon: Icons.card_giftcard,
-                onTap: () => onQuickRechargeTap('iTunes'),
+                onTap: () => onQuickRechargeTap(
+                  serviceId: 3,
+                  serviceName: 'iTunes',
+                ),
               ),
               _QuickActionCard(
                 title: 'Google Play',
                 icon: Icons.play_circle_outline,
-                onTap: () => onQuickRechargeTap('Google Play'),
+                onTap: () => onQuickRechargeTap(
+                  serviceId: 4,
+                  serviceName: 'Google Play',
+                ),
               ),
               _QuickActionCard(
                 title: 'يمن موبايل',
                 icon: Icons.phone_android,
-                onTap: () => onQuickRechargeTap('يمن موبايل'),
+                onTap: () => onQuickRechargeTap(
+                  serviceId: 5,
+                  serviceName: 'يمن موبايل',
+                ),
               ),
               _QuickActionCard(
                 title: 'You / Sabafon',
                 icon: Icons.sim_card_outlined,
-                onTap: () => onQuickRechargeTap('You / Sabafon'),
+                onTap: () => onQuickRechargeTap(
+                  serviceId: 6,
+                  serviceName: 'You / Sabafon',
+                ),
               ),
             ],
           ),

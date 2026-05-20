@@ -15,9 +15,11 @@ class ApiConfig {
   // Wallet
   static const String wallet = '/wallet';
   static const String walletTransactions = '/wallet/transactions';
+  static const String walletTopups = '/wallet/topups';
 
   // Orders
   static const String orders = '/orders';
+  static String orderDetails(int id) => '/orders/$id';
 
   // Topup
   static const String topupMethods = '/topup-methods';

@@ -12,15 +12,29 @@ class RechargeService {
     try {
       final response = await _dioClient.get(ApiConfig.topupMethods);
 
+      final responseData = response.data;
+      List<Map<String, dynamic>> methods = [];
+
+      if (responseData is Map<String, dynamic>) {
+        final data = responseData['data'];
+
+        if (data is List) {
+          methods = data
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList();
+        }
+      }
+
       return {
         'success': true,
-        'data': response.data['data'] ?? [],
+        'data': methods,
       };
     } on DioException catch (e) {
       return {
         'success': false,
         'message': _extractMessage(e),
-        'data': [],
+        'data': <Map<String, dynamic>>[],
       };
     }
   }
@@ -34,6 +48,16 @@ class RechargeService {
       }
       if (data['error'] != null) {
         return data['error'].toString();
+      }
+      if (data['errors'] is Map) {
+        final errors = data['errors'] as Map;
+        if (errors.isNotEmpty) {
+          final firstError = errors.values.first;
+          if (firstError is List && firstError.isNotEmpty) {
+            return firstError.first.toString();
+          }
+          return firstError.toString();
+        }
       }
     }
 

@@ -38,8 +38,9 @@ class AuthService {
 
       final data = Map<String, dynamic>.from(response.data);
 
-      if (data['access_token'] != null) {
-        await _tokenStorage.saveToken(data['access_token'].toString());
+      final token = _extractToken(data);
+      if (token != null && token.isNotEmpty) {
+        await _tokenStorage.saveToken(token);
       }
 
       return data;
@@ -63,8 +64,9 @@ class AuthService {
 
       final data = Map<String, dynamic>.from(response.data);
 
-      if (data['access_token'] != null) {
-        await _tokenStorage.saveToken(data['access_token'].toString());
+      final token = _extractToken(data);
+      if (token != null && token.isNotEmpty) {
+        await _tokenStorage.saveToken(token);
       }
 
       return data;
@@ -88,6 +90,7 @@ class AuthService {
       await _tokenStorage.deleteToken();
       return Map<String, dynamic>.from(response.data);
     } on DioException catch (e) {
+      await _tokenStorage.deleteToken();
       throw Exception(_handleDioError(e));
     }
   }
@@ -98,6 +101,28 @@ class AuthService {
 
   Future<String?> getToken() async {
     return await _tokenStorage.getToken();
+  }
+
+  String? _extractToken(Map<String, dynamic> data) {
+    if (data['access_token'] != null) {
+      return data['access_token'].toString();
+    }
+
+    if (data['token'] != null) {
+      return data['token'].toString();
+    }
+
+    if (data['data'] is Map<String, dynamic>) {
+      final nestedData = Map<String, dynamic>.from(data['data']);
+      if (nestedData['access_token'] != null) {
+        return nestedData['access_token'].toString();
+      }
+      if (nestedData['token'] != null) {
+        return nestedData['token'].toString();
+      }
+    }
+
+    return null;
   }
 
   String _handleDioError(DioException e) {
@@ -111,9 +136,12 @@ class AuthService {
 
         if (data['errors'] != null && data['errors'] is Map) {
           final errors = data['errors'] as Map;
-          final firstError = errors.values.first;
-          if (firstError is List && firstError.isNotEmpty) {
-            return firstError.first.toString();
+          if (errors.isNotEmpty) {
+            final firstError = errors.values.first;
+            if (firstError is List && firstError.isNotEmpty) {
+              return firstError.first.toString();
+            }
+            return firstError.toString();
           }
         }
       }

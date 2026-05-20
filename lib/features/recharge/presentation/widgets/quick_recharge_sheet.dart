@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:sanad_app/core/i18n/app_strings.dart';
+import 'package:sanad_app/core/theme/app_colors.dart';
+import 'package:sanad_app/features/order/data/services/orders_service.dart';
 
 class QuickRechargeSheet extends StatefulWidget {
+  final int serviceId;
   final String serviceName;
 
   const QuickRechargeSheet({
     super.key,
+    required this.serviceId,
     required this.serviceName,
   });
 
@@ -18,8 +23,12 @@ class _QuickRechargeSheetState extends State<QuickRechargeSheet> {
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _amountController = TextEditingController();
 
+  final OrdersService _ordersService = OrdersService();
+
   final List<int> _quickAmounts = [500, 1000, 2000, 5000, 10000];
+
   int? _selectedAmount;
+  bool _isSubmitting = false;
 
   @override
   void dispose() {
@@ -35,24 +44,50 @@ class _QuickRechargeSheetState extends State<QuickRechargeSheet> {
     });
   }
 
-  void _submit() {
+  Future<void> _submit() async {
+    if (_isSubmitting) return;
     if (!_formKey.currentState!.validate()) return;
 
-    Navigator.pop(context);
+    final amount = num.tryParse(_amountController.text.trim());
+    if (amount == null || amount <= 0) return;
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    final result = await _ordersService.createOrder(
+      serviceId: widget.serviceId,
+      targetAccount: _phoneController.text.trim(),
+      amount: amount,
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _isSubmitting = false;
+    });
+
+    final message = result['message']?.toString() ?? 'Unexpected result';
+
+    if (result['success'] == true) {
+      Navigator.pop(context, {
+        'success': true,
+        'message': message,
+      });
+      return;
+    }
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          'تم تجهيز طلب شحن ${widget.serviceName} '
-              'للرقم ${_phoneController.text} '
-              'بمبلغ ${_amountController.text}',
-        ),
+        content: Text(message),
+        backgroundColor: Colors.red,
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final s = AppStrings.of(context);
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Padding(
@@ -65,12 +100,13 @@ class _QuickRechargeSheetState extends State<QuickRechargeSheet> {
       child: SingleChildScrollView(
         child: Container(
           padding: const EdgeInsets.all(20),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(
+          decoration: BoxDecoration(
+            color: AppColors.cardDark,
+            borderRadius: const BorderRadius.vertical(
               top: Radius.circular(28),
               bottom: Radius.circular(28),
             ),
+            border: Border.all(color: AppColors.border),
           ),
           child: Form(
             key: _formKey,
@@ -83,17 +119,18 @@ class _QuickRechargeSheetState extends State<QuickRechargeSheet> {
                     width: 48,
                     height: 5,
                     decoration: BoxDecoration(
-                      color: Colors.grey,
+                      color: AppColors.textSecondary.withValues(alpha: 0.4),
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
                 ),
                 const SizedBox(height: 20),
-                const Text(
-                  'Quick Recharge',
-                  style: TextStyle(
+                Text(
+                  s.isArabic ? 'شحن سريع' : 'Quick Recharge',
+                  style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -101,67 +138,76 @@ class _QuickRechargeSheetState extends State<QuickRechargeSheet> {
                   widget.serviceName,
                   style: const TextStyle(
                     fontSize: 15,
-                    color: Colors.black54,
+                    color: AppColors.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 20),
-
                 TextFormField(
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
-                    labelText: 'Phone Number',
-                    hintText: 'Enter phone number',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.phone_android),
+                  style: const TextStyle(color: AppColors.textPrimary),
+                  decoration: InputDecoration(
+                    labelText: s.isArabic ? 'رقم الهاتف' : 'Phone Number',
+                    hintText: s.isArabic
+                        ? 'أدخل رقم الهاتف'
+                        : 'Enter phone number',
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.phone_android),
                   ),
                   validator: (value) {
                     final text = value?.trim() ?? '';
                     if (text.isEmpty) {
-                      return 'Phone number is required';
+                      return s.isArabic
+                          ? 'رقم الهاتف مطلوب'
+                          : 'Phone number is required';
                     }
                     if (text.length < 9) {
-                      return 'Enter a valid phone number';
+                      return s.isArabic
+                          ? 'أدخل رقم هاتف صحيح'
+                          : 'Enter a valid phone number';
                     }
                     return null;
                   },
                 ),
                 const SizedBox(height: 14),
-
                 TextFormField(
                   controller: _amountController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Amount',
-                    hintText: 'Enter amount',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.payments_outlined),
+                  style: const TextStyle(color: AppColors.textPrimary),
+                  decoration: InputDecoration(
+                    labelText: s.amount,
+                    hintText: s.isArabic ? 'أدخل المبلغ' : 'Enter amount',
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.payments_outlined),
                   ),
                   validator: (value) {
                     final text = value?.trim() ?? '';
                     if (text.isEmpty) {
-                      return 'Amount is required';
+                      return s.isArabic
+                          ? 'المبلغ مطلوب'
+                          : 'Amount is required';
                     }
 
                     final amount = int.tryParse(text);
                     if (amount == null || amount <= 0) {
-                      return 'Enter a valid amount';
+                      return s.isArabic
+                          ? 'أدخل مبلغًا صحيحًا'
+                          : 'Enter a valid amount';
                     }
 
                     return null;
                   },
                 ),
                 const SizedBox(height: 16),
-
-                const Text(
-                  'Quick Amounts',
-                  style: TextStyle(
+                Text(
+                  s.isArabic ? 'مبالغ سريعة' : 'Quick Amounts',
+                  style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 10),
-
                 Wrap(
                   spacing: 10,
                   runSpacing: 10,
@@ -171,22 +217,39 @@ class _QuickRechargeSheetState extends State<QuickRechargeSheet> {
                     return ChoiceChip(
                       label: Text('$amount'),
                       selected: isSelected,
-                      onSelected: (_) => _selectAmount(amount),
+                      onSelected:
+                      _isSubmitting ? null : (_) => _selectAmount(amount),
+                      selectedColor: AppColors.primaryGreen,
+                      backgroundColor: AppColors.cardDark,
+                      labelStyle: TextStyle(
+                        color: isSelected
+                            ? Colors.white
+                            : AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      side: const BorderSide(color: AppColors.border),
                     );
                   }).toList(),
                 ),
-
                 const SizedBox(height: 22),
-
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: _submit,
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 14),
-                      child: Text(
-                        'Continue',
-                        style: TextStyle(fontSize: 16),
+                    onPressed: _isSubmitting ? null : _submit,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      child: _isSubmitting
+                          ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                          : Text(
+                        s.isArabic ? 'متابعة' : 'Continue',
+                        style: const TextStyle(fontSize: 16),
                       ),
                     ),
                   ),
