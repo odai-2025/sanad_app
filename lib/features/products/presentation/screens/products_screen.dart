@@ -47,7 +47,6 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
     if (result['success'] == true) {
       final rawData = result['data'];
-
       List<Map<String, dynamic>> servicesList = [];
 
       if (rawData is List) {
@@ -87,6 +86,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
           final nameAr = (service['name_ar'] ?? '').toString().toLowerCase();
           final nameEn = (service['name_en'] ?? '').toString().toLowerCase();
           final code = (service['code'] ?? '').toString().toLowerCase();
+
           return nameAr.contains(query) ||
               nameEn.contains(query) ||
               code.contains(query);
@@ -123,22 +123,33 @@ class _ProductsScreenState extends State<ProductsScreen> {
         ? (item['name_ar'] ?? item['name_en'] ?? 'Service').toString()
         : (item['name_en'] ?? item['name_ar'] ?? 'Service').toString();
 
-    final result = await showModalBottomSheet<bool>(
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => QuickRechargeSheet(
         serviceId: int.tryParse(serviceId.toString()) ?? 0,
         serviceName: title,
+        onSuccess: (result) async {
+          await _loadServices();
+        },
       ),
     );
 
-    if (result == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('تم إرسال الطلب بنجاح'),
-        ),
-      );
+    if (!mounted) return;
+
+    if (result != null && result['success'] == true) {
+      final message = result['message']?.toString() ??
+          (s.isArabic ? 'تم تنفيذ الطلب بنجاح' : 'Order completed successfully');
+
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.green,
+          ),
+        );
     }
   }
 
@@ -194,9 +205,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
   Widget _buildBody(AppStrings s) {
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (_errorMessage != null) {
@@ -222,7 +231,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: _loadServices,
-                child: const Text('إعادة المحاولة'),
+                child: Text(s.isArabic ? 'إعادة المحاولة' : 'Retry'),
               ),
             ],
           ),
@@ -231,10 +240,10 @@ class _ProductsScreenState extends State<ProductsScreen> {
     }
 
     if (_filteredServices.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
-          'لا توجد خدمات متاحة',
-          style: TextStyle(
+          s.isArabic ? 'لا توجد خدمات متاحة' : 'No services available',
+          style: const TextStyle(
             color: AppColors.textSecondary,
             fontSize: 14,
           ),

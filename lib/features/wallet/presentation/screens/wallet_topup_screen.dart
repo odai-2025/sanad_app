@@ -5,6 +5,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/custom_app_bar.dart';
 import '../../data/services/wallet_service.dart';
 import '../../../recharge/data/services/recharge_service.dart';
+import '../../../recharge/presentation/widgets/quick_recharge_sheet.dart';
 
 class WalletTopupScreen extends StatefulWidget {
   const WalletTopupScreen({super.key});
@@ -166,6 +167,66 @@ class _WalletTopupScreenState extends State<WalletTopupScreen> {
     return AppColors.primaryBlue;
   }
 
+  int? _extractServiceId(Map<String, dynamic> method) {
+    final directId = method['service_id'] ?? method['id'];
+    if (directId == null) return null;
+    return int.tryParse(directId.toString());
+  }
+
+  Future<void> _openWalletTopupMethod(Map<String, dynamic> method) async {
+    final s = AppStrings.of(context);
+
+    final serviceId = _extractServiceId(method);
+    if (serviceId == null || serviceId <= 0) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              s.isArabic
+                  ? 'معرّف خدمة الشحن غير متوفر لهذه الوسيلة'
+                  : 'Top-up service ID is not available for this method',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      return;
+    }
+
+    final serviceName = _methodTitle(method, s);
+
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => QuickRechargeSheet(
+        serviceId: serviceId,
+        serviceName: serviceName,
+        onSuccess: (result) async {
+          await _loadWalletData();
+        },
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (result != null && result['success'] == true) {
+      final message = result['message']?.toString() ??
+          (s.isArabic
+              ? 'تم إرسال طلب شحن المحفظة بنجاح'
+              : 'Wallet top-up request submitted successfully');
+
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.green,
+          ),
+        );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = AppStrings.of(context);
@@ -281,17 +342,7 @@ class _WalletTopupScreenState extends State<WalletTopupScreen> {
                     icon: _resolveMethodIcon(method),
                     color: _resolveMethodColor(method),
                     buttonText: s.topup,
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            s.isArabic
-                                ? 'سيتم ربط إنشاء طلب الشحن الحقيقي في الخطوة التالية'
-                                : 'Real top-up request creation will be connected in the next step',
-                          ),
-                        ),
-                      );
-                    },
+                    onTap: () => _openWalletTopupMethod(method),
                   ),
                 );
               }),

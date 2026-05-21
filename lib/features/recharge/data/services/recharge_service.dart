@@ -15,7 +15,12 @@ class RechargeService {
       final responseData = response.data;
       List<Map<String, dynamic>> methods = [];
 
-      if (responseData is Map<String, dynamic>) {
+      if (responseData is List) {
+        methods = responseData
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+      } else if (responseData is Map<String, dynamic>) {
         final data = responseData['data'];
 
         if (data is List) {
@@ -28,12 +33,22 @@ class RechargeService {
 
       return {
         'success': true,
+        'message': responseData is Map<String, dynamic>
+            ? responseData['message']?.toString() ??
+            'Topup methods loaded successfully'
+            : 'Topup methods loaded successfully',
         'data': methods,
       };
     } on DioException catch (e) {
       return {
         'success': false,
         'message': _extractMessage(e),
+        'data': <Map<String, dynamic>>[],
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': e.toString(),
         'data': <Map<String, dynamic>>[],
       };
     }
@@ -43,24 +58,49 @@ class RechargeService {
     final data = e.response?.data;
 
     if (data is Map<String, dynamic>) {
-      if (data['message'] != null) {
-        return data['message'].toString();
-      }
-      if (data['error'] != null) {
-        return data['error'].toString();
-      }
       if (data['errors'] is Map) {
         final errors = data['errors'] as Map;
+
         if (errors.isNotEmpty) {
           final firstError = errors.values.first;
+
           if (firstError is List && firstError.isNotEmpty) {
             return firstError.first.toString();
           }
+
           return firstError.toString();
         }
       }
+
+      final serverMessage = data['message']?.toString();
+      final serverError = data['error']?.toString();
+
+      if (serverMessage != null && serverMessage.isNotEmpty) {
+        return serverMessage;
+      }
+
+      if (serverError != null && serverError.isNotEmpty) {
+        return serverError;
+      }
     }
 
-    return e.message ?? 'Unexpected error occurred';
+    switch (e.type) {
+      case DioExceptionType.connectionTimeout:
+        return 'Connection timeout';
+      case DioExceptionType.sendTimeout:
+        return 'Send timeout';
+      case DioExceptionType.receiveTimeout:
+        return 'Receive timeout';
+      case DioExceptionType.badResponse:
+        return 'Invalid server response';
+      case DioExceptionType.cancel:
+        return 'Request cancelled';
+      case DioExceptionType.connectionError:
+        return 'Connection error';
+      case DioExceptionType.unknown:
+        return e.message ?? 'Unexpected error occurred';
+      case DioExceptionType.badCertificate:
+        return 'Bad certificate';
+    }
   }
 }

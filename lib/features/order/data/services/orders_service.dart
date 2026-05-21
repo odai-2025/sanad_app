@@ -39,10 +39,30 @@ class OrdersService {
         'data': responseData['data'] ?? responseData,
       };
     } on DioException catch (e) {
+      final data = e.response?.data;
+
+      String message = _extractMessage(e);
+
+      if (data is Map<String, dynamic>) {
+        final serverMessage = data['message']?.toString();
+        final serverError = data['error']?.toString();
+
+        if (serverMessage != null &&
+            serverMessage.isNotEmpty &&
+            serverError != null &&
+            serverError.isNotEmpty) {
+          message = '$serverMessage | $serverError';
+        } else if (serverMessage != null && serverMessage.isNotEmpty) {
+          message = serverMessage;
+        } else if (serverError != null && serverError.isNotEmpty) {
+          message = serverError;
+        }
+      }
+
       return {
         'success': false,
-        'message': _extractMessage(e),
-        'data': e.response?.data ?? {},
+        'message': message,
+        'data': data ?? {},
       };
     } catch (e) {
       return {
@@ -57,10 +77,6 @@ class OrdersService {
     final data = e.response?.data;
 
     if (data is Map<String, dynamic>) {
-      if (data['message'] != null) {
-        return data['message'].toString();
-      }
-
       if (data['errors'] is Map) {
         final errors = data['errors'] as Map;
 
@@ -73,6 +89,10 @@ class OrdersService {
 
           return firstError.toString();
         }
+      }
+
+      if (data['message'] != null) {
+        return data['message'].toString();
       }
 
       if (data['error'] != null) {

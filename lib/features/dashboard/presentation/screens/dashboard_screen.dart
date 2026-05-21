@@ -29,26 +29,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required int serviceId,
     required String serviceName,
   }) async {
-    final result = await showModalBottomSheet<bool>(
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => QuickRechargeSheet(
         serviceId: serviceId,
         serviceName: serviceName,
+        onSuccess: (result) async {
+          if (!mounted) return;
+          setState(() {});
+        },
       ),
     );
 
     if (!mounted) return;
 
-    if (result == true) {
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('تم إرسال طلب $serviceName بنجاح'),
-          backgroundColor: Colors.green,
-        ),
-      );
+    if (result != null && result['success'] == true) {
+      final message = result['message']?.toString() ??
+          'تم إرسال طلب $serviceName بنجاح';
+
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.green,
+          ),
+        );
     }
   }
 
@@ -71,13 +79,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         now.difference(_lastBackPressedAt!) > const Duration(seconds: 2)) {
       _lastBackPressedAt = now;
 
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('اضغط مرة أخرى للخروج'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('اضغط مرة أخرى للخروج'),
+            duration: Duration(seconds: 2),
+          ),
+        );
 
       return;
     }
